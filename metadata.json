@@ -1,0 +1,6 @@
+{
+  "name": "CERTIDÃO DE ATENDIMENTO",
+  "description": "Painel de análise e classificação de atendimentos técnicos baseado em LGN_TEC, RECURSO_UN, JORNADA e VALIDACAO.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

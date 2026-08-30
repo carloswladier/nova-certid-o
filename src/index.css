@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+@theme {
+  --color-claro: #EE2924;
+  --color-claro-dark: #C4121A;
+}
