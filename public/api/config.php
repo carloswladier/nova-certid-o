@@ -28,9 +28,9 @@ if (file_exists(__DIR__ . '/../.env')) {
 // Configurações do Banco MySQL Hostinger
 define('DB_HOST', getenv('DB_HOST') ?: getenv('MYSQL_HOST') ?: 'localhost');
 define('DB_PORT', getenv('DB_PORT') ?: getenv('MYSQL_PORT') ?: '3306');
-define('DB_USER', getenv('DB_USER') ?: getenv('MYSQL_USER') ?: '');
-define('DB_PASSWORD', getenv('DB_PASSWORD') ?: getenv('MYSQL_PASSWORD') ?: '');
-define('DB_NAME', getenv('DB_NAME') ?: getenv('MYSQL_DATABASE') ?: '');
+define('DB_USER', getenv('DB_USER') ?: getenv('MYSQL_USER') ?: 'u688072783_CWCERTIDAO');
+define('DB_PASSWORD', getenv('DB_PASSWORD') ?: getenv('MYSQL_PASSWORD') ?: 'Cwrocha2026');
+define('DB_NAME', getenv('DB_NAME') ?: getenv('MYSQL_DATABASE') ?: 'u688072783_CERTIDAO');
 
 /**
  * Função de Conexão PDO com Hostinger MySQL
