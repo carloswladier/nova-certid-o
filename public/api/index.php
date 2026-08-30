@@ -179,6 +179,9 @@ if ($path === 'auth/login' && $method === 'POST') {
 if ($path === 'profiles' && $method === 'GET') {
     if ($pdo) {
         try {
+            // Limpar automaticamente registros inválidos com username vazio caso existam
+            $pdo->exec("DELETE FROM profiles WHERE username IS NULL OR TRIM(username) = ''");
+
             $stmt = $pdo->query("SELECT id, username, role, password_plain, empresas FROM profiles ORDER BY username ASC");
             $rows = $stmt->fetchAll();
             $result = [];
@@ -227,18 +230,61 @@ if ($path === 'admin/create-user' && $method === 'POST') {
         exit;
     }
 
-    $normalized = strtolower(preg_replace('/[^a-z0-9._-]/', '', $login));
-    $userId = 'usr_' . time() . '_' . substr(md5(uniqid()), 0, 5);
+    // Normalizar removendo acentos e convertendo para minúsculo
+    $loginClean = $login;
+    $from = ['á','à','â','ã','ä','é','è','ê','ë','í','ì','î','ï','ó','ò','ô','õ','ö','ú','ù','û','ü','ç','ñ',
+             'Á','À','Â','Ã','Ä','É','È','Ê','Ë','Í','Ì','Î','Ï','Ó','Ò','Ô','Õ','Ö','Ú','Ù','Û','Ü','Ç','Ñ'];
+    $to   = ['a','a','a','a','a','e','e','e','e','i','i','i','i','o','o','o','o','o','u','u','u','u','c','n',
+             'a','a','a','a','a','e','e','e','e','i','i','i','i','o','o','o','o','o','u','u','u','u','c','n'];
+    $loginClean = str_replace($from, $to, $loginClean);
+    $normalized = strtolower(preg_replace('/[^a-zA-Z0-9._@-]/', '', $loginClean));
+
+    if (empty($normalized)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Nome de usuário inválido. Digite letras ou números.']);
+        exit;
+    }
+
     $empresasArray = is_array($empresas) ? $empresas : [$empresas];
 
     if ($pdo) {
         try {
-            $stmt = $pdo->prepare("
-                INSERT INTO profiles (id, username, password, password_plain, role, empresas)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE password = VALUES(password), password_plain = VALUES(password_plain), role = VALUES(role), empresas = VALUES(empresas)
-            ");
-            $stmt->execute([$userId, $normalized, $password, $password, $role, json_encode($empresasArray)]);
+            // Verificar se já existe um usuário com esse username
+            $checkStmt = $pdo->prepare("SELECT id, username FROM profiles WHERE LOWER(TRIM(username)) = ? LIMIT 1");
+            $checkStmt->execute([$normalized]);
+            $existing = $checkStmt->fetch();
+
+            if ($existing) {
+                // Se já existe, atualiza os dados daquele usuário específico
+                $updateStmt = $pdo->prepare("
+                    UPDATE profiles 
+                    SET password = ?, password_plain = ?, role = ?, empresas = ?
+                    WHERE id = ?
+                ");
+                $updateStmt->execute([$password, $password, $role, json_encode($empresasArray), $existing['id']]);
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => "Usuário '$normalized' atualizado com sucesso.",
+                    'user' => ['id' => $existing['id'], 'username' => $normalized, 'role' => $role, 'empresas' => $empresasArray]
+                ]);
+                exit;
+            } else {
+                // Cria um novo usuário com ID único exclusivo
+                $userId = 'usr_' . time() . '_' . substr(md5(uniqid(mt_rand(), true)), 0, 6);
+                $insertStmt = $pdo->prepare("
+                    INSERT INTO profiles (id, username, password, password_plain, role, empresas)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ");
+                $insertStmt->execute([$userId, $normalized, $password, $password, $role, json_encode($empresasArray)]);
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => "Usuário '$normalized' cadastrado com sucesso.",
+                    'user' => ['id' => $userId, 'username' => $normalized, 'role' => $role, 'empresas' => $empresasArray]
+                ]);
+                exit;
+            }
         } catch (Exception $e) {
             http_response_code(500);
             echo json_encode(['error' => 'Erro ao salvar no banco MySQL: ' . $e->getMessage()]);
@@ -249,7 +295,7 @@ if ($path === 'admin/create-user' && $method === 'POST') {
     echo json_encode([
         'success' => true,
         'message' => "Usuário $normalized cadastrado com sucesso.",
-        'user' => ['id' => $userId, 'username' => $normalized, 'role' => $role, 'empresas' => $empresasArray]
+        'user' => ['id' => 'usr_' . time(), 'username' => $normalized, 'role' => $role, 'empresas' => $empresasArray]
     ]);
     exit;
 }

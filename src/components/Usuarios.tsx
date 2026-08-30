@@ -154,6 +154,12 @@ export const Usuarios = ({ adminProfile, todasEmpresasDisponiveis = [] }: Usuari
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanLogin = newLogin.trim();
+    if (!cleanLogin) {
+      setMessage({ text: 'Informe o nome de usuário / login.', type: 'error' });
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
 
@@ -161,7 +167,7 @@ export const Usuarios = ({ adminProfile, todasEmpresasDisponiveis = [] }: Usuari
     
     try {
       const res = await api.createUser({
-        login: newLogin,
+        login: cleanLogin,
         password: newPassword,
         role: newRole,
         adminId: adminProfile?.id,
@@ -169,7 +175,7 @@ export const Usuarios = ({ adminProfile, todasEmpresasDisponiveis = [] }: Usuari
       });
 
       if (res.success) {
-        setMessage({ text: `Usuário ${newLogin} cadastrado com sucesso no banco Hostinger!`, type: 'success' });
+        setMessage({ text: `Usuário "${cleanLogin}" cadastrado com sucesso no banco Hostinger!`, type: 'success' });
         setNewLogin('');
         setNewPassword('');
         setSelectedEmpresas(['TODAS']);
@@ -191,12 +197,13 @@ export const Usuarios = ({ adminProfile, todasEmpresasDisponiveis = [] }: Usuari
       return;
     }
 
-    if (!confirm(`Deseja realmente excluir o usuário "${username}"?`)) return;
+    const displayName = username || 'este perfil';
+    if (!confirm(`Deseja realmente excluir ${displayName}?`)) return;
 
     try {
       const res = await api.deleteUser(userId, adminProfile?.id);
       if (res.success) {
-        setMessage({ text: `Usuário ${username} excluído com sucesso.`, type: 'success' });
+        setMessage({ text: `Usuário ${displayName} excluído com sucesso.`, type: 'success' });
         fetchUsers();
       } else {
         setMessage({ text: res.error || 'Erro ao excluir usuário.', type: 'error' });
@@ -455,9 +462,13 @@ export const Usuarios = ({ adminProfile, todasEmpresasDisponiveis = [] }: Usuari
                           <td className="p-4 font-bold text-zinc-900">
                             <div className="flex items-center gap-2">
                               <div className="w-7 h-7 rounded-lg bg-zinc-100 text-zinc-700 flex items-center justify-center font-black text-xs uppercase">
-                                {u.username.substring(0, 2)}
+                                {(u.username || 'U').substring(0, 2)}
                               </div>
-                              <span>{u.username}</span>
+                              {u.username ? (
+                                <span>{u.username}</span>
+                              ) : (
+                                <span className="text-zinc-400 italic font-normal text-[11px]">(Nome em branco)</span>
+                              )}
                             </div>
                           </td>
 

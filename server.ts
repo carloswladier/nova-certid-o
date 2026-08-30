@@ -223,6 +223,9 @@ async function startServer() {
     const pool = getPool();
     if (pool && isHostingerConfigured() && isDbConnected()) {
       try {
+        // Auto-clean any invalid empty username records
+        await pool.query("DELETE FROM profiles WHERE username IS NULL OR TRIM(username) = ''").catch(() => {});
+
         const [rows]: any = await pool.query('SELECT id, username, role, password, password_plain, empresas FROM profiles ORDER BY username ASC');
         const formatted = rows.map((u: any) => {
           let empresas = ['TODAS'];
@@ -247,7 +250,7 @@ async function startServer() {
       }
     }
 
-    return res.json(memoryProfiles.map(u => ({
+    return res.json(memoryProfiles.filter(u => u.username && u.username.trim() !== '').map(u => ({
       id: u.id,
       username: u.username,
       role: u.role || 'editor',
@@ -264,15 +267,23 @@ async function startServer() {
       return res.status(400).json({ error: "Dados incompletos (login, password, role)." });
     }
 
-    const normalizedUsername = login.toLowerCase().trim().replace(/[^a-z0-9._-]/g, '');
+    const loginClean = String(login)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const normalizedUsername = loginClean.toLowerCase().trim().replace(/[^a-z0-9._@-]/g, '');
+
+    if (!normalizedUsername) {
+      return res.status(400).json({ error: "Nome de usuário inválido. Digite letras ou números." });
+    }
+
     const pool = getPool();
     const empresasArray = Array.isArray(empresas) ? empresas : (empresas ? [empresas] : ['TODAS']);
     const userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
     // Save in memory store
-    const existingIndex = memoryProfiles.findIndex(u => u.username === normalizedUsername);
+    const existingIndex = memoryProfiles.findIndex(u => u.username.toLowerCase() === normalizedUsername);
     const newProfile: MemoryProfile = {
-      id: userId,
+      id: existingIndex >= 0 ? memoryProfiles[existingIndex].id : userId,
       username: normalizedUsername,
       password,
       password_plain: password,
@@ -288,12 +299,23 @@ async function startServer() {
 
     if (pool && isHostingerConfigured() && isDbConnected()) {
       try {
-        await pool.query(
-          `INSERT INTO profiles (id, username, password, password_plain, role, empresas) 
-           VALUES (?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE password = VALUES(password), password_plain = VALUES(password_plain), role = VALUES(role), empresas = VALUES(empresas)`,
-          [userId, normalizedUsername, password, password, role, JSON.stringify(empresasArray)]
+        const [existingRows]: any = await pool.query(
+          'SELECT id FROM profiles WHERE LOWER(TRIM(username)) = ? LIMIT 1',
+          [normalizedUsername]
         );
+
+        if (existingRows && existingRows.length > 0) {
+          const existingId = existingRows[0].id;
+          await pool.query(
+            'UPDATE profiles SET password = ?, password_plain = ?, role = ?, empresas = ? WHERE id = ?',
+            [password, password, role, JSON.stringify(empresasArray), existingId]
+          );
+        } else {
+          await pool.query(
+            'INSERT INTO profiles (id, username, password, password_plain, role, empresas) VALUES (?, ?, ?, ?, ?, ?)',
+            [userId, normalizedUsername, password, password, role, JSON.stringify(empresasArray)]
+          );
+        }
       } catch (err: any) {
         console.warn('[Hostinger Create User Notice - Memory Saved]', err.message);
       }
